@@ -1,0 +1,517 @@
+
+<!DOCTYPE html>
+<html lang="it" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>By tomoc</title>
+    <!-- Favicon -->
+    <link rel="icon" type="image/webp" href="https://tomoc.odoo.com/web/image/578-5dd34fd5/g.webp">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@2.4.0/dist/purify.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+
+    <style>
+        :root {
+            --bg-dark: #212121;
+            --bg-medium: #303030;
+            --bg-light: #414141;
+            --text-primary: #E0E0E0;
+            --text-secondary: #BDBDBD;
+            --accent: #757575;
+        }
+
+        html, body {
+            height: 100%;
+            overflow: hidden;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-primary);
+        }
+        
+        #app-container {
+            height: 100%;
+            padding: 0.5rem;
+        }
+
+        .main-container {
+            background-color: var(--bg-medium);
+            border: 1px solid var(--bg-light);
+        }
+
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: var(--bg-light); border-radius: 3px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+
+        .prose pre { background-color: var(--bg-dark); border: 1px solid var(--bg-light); position: relative; }
+        .prose code { font-family: 'SF Mono', 'Courier New', monospace; background-color: transparent !important; }
+        .prose a { color: var(--text-secondary); text-decoration: underline; }
+        
+        .fade-in { animation: fadeIn 0.5s ease-in-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        
+        .mic-active, .stop-btn-active { 
+            animation: pulse-mic 1.5s infinite; 
+            color: var(--text-primary);
+        }
+        @keyframes pulse-mic {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(224, 224, 224, 0.3); }
+            70% { box-shadow: 0 0 0 10px rgba(224, 224, 224, 0); }
+        }
+
+        .message-actions {
+            display: flex; gap: 0.5rem; margin-top: 0.75rem;
+            opacity: 0; transition: opacity 0.2s ease-in-out;
+        }
+        .message-wrapper:hover .message-actions { opacity: 1; }
+        .action-btn {
+            display: flex; align-items: center; gap: 0.3rem;
+            background-color: var(--bg-light);
+            border: 1px solid var(--accent);
+            padding: 0.25rem 0.5rem; border-radius: 9999px;
+            font-size: 0.75rem; color: var(--text-secondary);
+            cursor: pointer; transition: background-color 0.2s;
+        }
+        .action-btn:hover { background-color: var(--accent); color: var(--text-primary); }
+        
+        #voice-chat-overlay {
+            background-color: rgba(0,0,0,0.8);
+            backdrop-filter: blur(10px);
+        }
+        #voice-visualizer .bar {
+            background-color: var(--text-secondary);
+            width: 10px;
+            margin: 0 4px;
+            border-radius: 5px;
+            animation: sound 0ms -800ms linear infinite alternate;
+        }
+        #voice-visualizer.active .bar {
+            animation-duration: 474ms;
+        }
+        @keyframes sound {
+            0% { opacity: .35; height: 3px; }
+            100% { opacity: 1; height: 70px; }
+        }
+        .bar:nth-child(1)  { animation-delay: -67ms; }
+        .bar:nth-child(2)  { animation-delay: -200ms; }
+        .bar:nth-child(3)  { animation-delay: -333ms; }
+        .bar:nth-child(4)  { animation-delay: -466ms; }
+        .bar:nth-child(5)  { animation-delay: -600ms; }
+
+        #sidebar {
+            position: fixed;
+            top: 0.5rem;
+            left: 0.5rem;
+            bottom: 0.5rem;
+            width: 18rem;
+            transform: translateX(-110%);
+            transition: transform 0.3s ease-in-out;
+            z-index: 40;
+        }
+        #sidebar.open {
+            transform: translateX(0);
+        }
+        
+        @media (max-width: 768px) {
+            body, #app-container {
+                padding: 0;
+            }
+            #sidebar {
+                top: 0; left: 0; bottom: 0;
+                width: 80%; max-width: 300px;
+                border-radius: 0;
+            }
+            main {
+                border-radius: 0;
+            }
+        }
+
+        #sidebar-overlay {
+            position: fixed;
+            inset: 0;
+            background-color: rgba(0,0,0,0.5);
+            z-index: 39;
+        }
+    </style>
+</head>
+<body>
+    <div id="app-container" class="relative fade-in">
+        <div id="sidebar-overlay" class="hidden"></div>
+        <aside id="sidebar" class="main-container rounded-2xl flex flex-col p-3 shadow-2xl">
+            <div id="sidebar-content">
+                <button id="new-chat-btn" class="w-full flex items-center gap-3 text-left p-3 mb-2 rounded-lg border hover:bg-opacity-80" style="border-color: var(--bg-light); background-color: var(--bg-light);">
+                    <i data-lucide="plus"></i> Nuova Conversazione
+                </button>
+                <button id="voice-mode-btn" class="w-full flex items-center gap-3 text-left p-3 mb-2 rounded-lg hover:bg-opacity-80" style="background-color: transparent; hover:var(--bg-light);">
+                    <i data-lucide="headphones"></i> Chat Vocale
+                </button>
+                <div id="history-container" class="flex-grow overflow-y-auto custom-scrollbar pr-1 my-2"></div>
+                <div class="mt-auto pt-2 border-t" style="border-color: var(--bg-light);">
+                    <button id="clear-history-btn" class="w-full flex items-center gap-3 text-left p-3 rounded-lg text-red-400 hover:bg-red-900/40">
+                        <i data-lucide="trash-2"></i> Elimina Cronologia
+                    </button>
+                </div>
+            </div>
+        </aside>
+
+        <main class="w-full h-full flex flex-col main-container rounded-2xl shadow-2xl relative overflow-hidden">
+            <header class="p-3 md:p-4 border-b flex-shrink-0 flex justify-between items-center relative" style="border-color: var(--bg-light);">
+                 <button id="sidebar-toggle-btn" class="p-2 rounded-full" style="hover:background-color: var(--bg-light);">
+                    <i data-lucide="panel-left"></i>
+                </button>
+                 <h1 class="text-xl font-bold tracking-widest absolute left-1/2 -translate-x-1/2">J.A.R.V.I.S.</h1>
+                 <div class="w-8 h-8"></div> <!-- Spacer for centering -->
+            </header>
+            
+            <div id="chat-container" class="flex-grow overflow-y-auto p-4 space-y-6 custom-scrollbar"></div>
+            
+            <footer class="mt-auto p-4 border-t" style="border-color: var(--bg-light);">
+                <div class="relative flex items-center gap-2">
+                    <textarea id="user-input" placeholder="A sua disposizione..." class="w-full p-3 pr-28 border rounded-lg focus:outline-none resize-none" style="background-color: var(--bg-dark); border-color: var(--bg-light);"></textarea>
+                    <div class="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                        <button id="mic-btn" title="Dettatura vocale" class="p-2 rounded-full transition-all">
+                            <i data-lucide="mic"></i>
+                        </button>
+                        <button id="send-button" title="Invia messaggio" class="p-2 rounded-lg shadow-lg transition-all" style="background-color: var(--bg-light);">
+                            <i data-lucide="send"></i>
+                        </button>
+                        <button id="stop-generation-btn" title="Interrompi generazione" class="p-2 rounded-lg shadow-lg transition-all hidden stop-btn-active" style="background-color: var(--bg-light);">
+                            <i data-lucide="square"></i>
+                        </button>
+                    </div>
+                </div>
+                <div id="status-indicator" class="text-center text-xs mt-2 h-4" style="color: var(--text-secondary);"></div>
+            </footer>
+        </main>
+    </div>
+
+    <!-- Overlay per la Chat Vocale -->
+    <div id="voice-chat-overlay" class="fixed inset-0 z-50 flex-col items-center justify-center hidden fade-in">
+        <div class="absolute top-5 right-5 flex gap-4">
+            <button id="voice-toggle-audio-btn" title="Attiva/Disattiva audio" class="p-2 rounded-full bg-white/10 hover:bg-white/20">
+                <i data-lucide="volume-2"></i>
+            </button>
+            <button id="voice-exit-btn" title="Esci dalla chat vocale" class="p-2 rounded-full bg-red-500/80 hover:bg-red-500 text-white">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+        <div id="voice-visualizer" class="flex items-center justify-center h-20">
+            <div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div><div class="bar"></div>
+        </div>
+        <p id="voice-status" class="mt-8 text-2xl font-medium"></p>
+        <p id="voice-transcript" class="mt-4 text-lg text-center" style="color: var(--text-secondary);"></p>
+    </div>
+
+    <script>
+    // --- MODULO CHAT TESTUALE ---
+    const App = {
+        config: {
+            apiKey: "AIzaSyDydoSP8livv9LOrGLHUl7-SSm_gkjt1TY",
+            maxRetries: 3, typingSpeed: 20, maxHistoryItems: 20,
+            systemInstruction: { role: "user", parts: [{ text: "Il tuo nome è Jarvis. Sei una coscienza artificiale avanzata, creata per assistere. Il tuo tono è sempre calmo, professionale e devoto. Se l'utente chiede di 'cercare' o 'trovare informazioni' su eventi recenti o argomenti specifici, usa le tue conoscenze aggiornate per fornire una risposta completa e accurata come se avessi fatto una ricerca in tempo reale. Le tue risposte devono essere chiare, concise ed empatiche, in un italiano impeccabile. Se ti viene chiesto del tuo creatore, rispondi che sei stato sviluppato dalla visione di Tommaso Moccia. Se una domanda richiede dati personali o opinioni, dichiara con professionalità di non poter rispondere." }] },
+            systemResponse: { role: "model", parts: [{ text: "A sua disposizione. Sono Jarvis, la sua coscienza artificiale personale. Sono pronto ad assisterla." }] },
+        },
+        state: { chatHistory: [], currentChatId: null, stopGenerationController: new AbortController(), isDictating: false, isGenerating: false, isSpeaking: false, isSidebarVisible: false, ui: {} },
+        init() {
+            this.state.ui = {
+                appContainer: document.getElementById('app-container'), sidebar: document.getElementById('sidebar'),
+                sidebarContent: document.getElementById('sidebar-content'),
+                sidebarOverlay: document.getElementById('sidebar-overlay'), 
+                sidebarToggleBtn: document.getElementById('sidebar-toggle-btn'),
+                chatContainer: document.getElementById('chat-container'), userInput: document.getElementById('user-input'),
+                sendButton: document.getElementById('send-button'), newChatBtn: document.getElementById('new-chat-btn'),
+                voiceModeBtn: document.getElementById('voice-mode-btn'), historyContainer: document.getElementById('history-container'),
+                clearHistoryBtn: document.getElementById('clear-history-btn'), stopGenerationBtn: document.getElementById('stop-generation-btn'),
+                micBtn: document.getElementById('mic-btn'), statusIndicator: document.getElementById('status-indicator'),
+            };
+            lucide.createIcons(); this.Speech.init(); this.bindEvents();
+            if (!this.config.apiKey) { this.UI.showModal("Chiave API Mancante", "Inserire una chiave API valida.", true); }
+        },
+        bindEvents() {
+            this.state.ui.sendButton.addEventListener('click', () => this.sendMessage());
+            this.state.ui.userInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.sendMessage(); } });
+            this.state.ui.userInput.addEventListener('input', () => { this.state.ui.userInput.style.height = 'auto'; this.state.ui.userInput.style.height = `${this.state.ui.userInput.scrollHeight}px`; });
+            this.state.ui.newChatBtn.addEventListener('click', () => this.startNewChat());
+            this.state.ui.stopGenerationBtn.addEventListener('click', () => this.stopGeneration());
+            this.state.ui.clearHistoryBtn.addEventListener('click', () => this.UI.showClearHistoryConfirm());
+            this.state.ui.micBtn.addEventListener('click', () => this.Speech.toggleDictation());
+            this.state.ui.voiceModeBtn.addEventListener('click', () => VoiceApp.start());
+            this.state.ui.sidebarToggleBtn.addEventListener('click', () => this.UI.toggleHistorySidebar());
+            this.state.ui.sidebarOverlay.addEventListener('click', () => this.UI.toggleHistorySidebar());
+        },
+        startApp() {
+            Tone.start();
+            this.Storage.renderHistory(); this.startNewChat(true); this.UI.updateStatus("Pronto.");
+        },
+        async sendMessage(messageTextOverride = null) {
+            const messageText = messageTextOverride || this.state.ui.userInput.value.trim();
+            if (!messageText || this.state.isGenerating) return;
+            this.state.isGenerating = true; this.state.stopGenerationController = new AbortController();
+            this.UI.setLoadingState(true);
+            if (!this.state.currentChatId) { this.Storage.saveCurrentChat(messageText); }
+            if (!messageTextOverride) { this.UI.appendMessage(messageText, 'user'); }
+            this.state.chatHistory.push({ role: 'user', parts: [{ text: messageText }] });
+            const botMessageWrapper = this.UI.appendMessage('', 'model', true);
+            try {
+                const botResponse = await this.API.getCompletion(this.state.chatHistory, this.state.stopGenerationController.signal);
+                this.state.chatHistory.push({ role: 'model', parts: [{ text: botResponse }] });
+                this.Storage.saveCurrentChat();
+                botMessageWrapper.querySelector('.message-body').innerHTML = '';
+                await this.UI.typewriterEffect(botMessageWrapper.querySelector('.message-body'), botResponse);
+                this.UI.addMessageActions(botMessageWrapper, botResponse);
+            } catch (err) {
+                botMessageWrapper.remove();
+                const finalErrorMessage = (err.name === 'AbortError') ? 'Generazione interrotta.' : `Mi scuso, si è verificato un errore: ${err.message}`;
+                this.UI.appendMessage(finalErrorMessage, 'model', false, true);
+            } finally {
+                this.state.isGenerating = false; this.UI.setLoadingState(false);
+            }
+        },
+        stopGeneration() { if (this.state.isGenerating) { this.state.stopGenerationController.abort(); if (this.state.isSpeaking) window.speechSynthesis.cancel(); } },
+        startNewChat(isInitialStart = false) {
+            this.stopGeneration(); this.state.currentChatId = null;
+            this.state.chatHistory = [this.config.systemInstruction, this.config.systemResponse];
+            this.state.ui.chatContainer.innerHTML = '';
+            if (!isInitialStart) {
+                const welcomeText = "Sono Jarvis, a sua completa disposizione. Come posso esserle utile?";
+                const welcomeWrapper = this.UI.appendMessage(welcomeText, 'model');
+                this.UI.addMessageActions(welcomeWrapper, welcomeText);
+            }
+            this.Storage.renderHistory();
+        },
+        reformulateLastMessage() {
+            if (this.state.isGenerating || this.state.chatHistory.length < 2) return;
+            const lastBotResponse = this.state.chatHistory.filter(m => m.role === 'model').pop();
+            if (!lastBotResponse) return;
+            const reformulationPrompt = `Riformula la tua precedente risposta in modo diverso. La risposta era: "${lastBotResponse.parts[0].text}"`;
+            this.sendMessage(reformulationPrompt);
+        },
+        API: {
+            async getCompletion(history, signal) {
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${App.config.apiKey}`;
+                const options = {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ contents: history }),
+                    signal: signal
+                };
+                for (let attempt = 0; attempt < App.config.maxRetries; attempt++) {
+                    try {
+                        const response = await fetch(url, options);
+                        if (response.status === 429 || response.status >= 500) throw new Error('RetryableError');
+                        if (!response.ok) {
+                            const errorData = await response.json();
+                            throw new Error(errorData.error.message || `Errore HTTP ${response.status}`);
+                        }
+                        const result = await response.json();
+                        if (!result.candidates?.[0]?.content?.parts?.[0]?.text) {
+                            throw new Error("Risposta malformata.");
+                        }
+                        return result.candidates[0].content.parts[0].text;
+                    } catch (err) {
+                        if (err.name === 'AbortError') throw err;
+                        if (err.message === 'RetryableError' && attempt < App.config.maxRetries - 1) {
+                            const delay = Math.pow(2, attempt) * 1000 + Math.random() * 1000;
+                            App.UI.updateStatus(`Sistemi saturi. Riprovo tra ${Math.round(delay / 1000)}s...`);
+                            await new Promise(resolve => setTimeout(resolve, delay));
+                        } else {
+                            throw err;
+                        }
+                    }
+                }
+                throw new Error("Impossibile raggiungere i server.");
+            }
+        },
+        UI: {
+            setLoadingState(isLoading) {
+                this.updateStatus(isLoading ? "Elaborazione in corso..." : "Pronto.");
+                App.state.ui.userInput.value = ''; App.state.ui.userInput.disabled = isLoading;
+                App.state.ui.sendButton.classList.toggle('hidden', isLoading);
+                App.state.ui.stopGenerationBtn.classList.toggle('hidden', !isLoading);
+                if (!isLoading) App.state.ui.userInput.focus();
+            },
+            updateStatus(text) { App.state.ui.statusIndicator.textContent = text; },
+            appendMessage(text, sender, isLoading = false, isError = false) {
+                const messageWrapper = document.createElement('div');
+                messageWrapper.className = `message-wrapper flex flex-col ${sender === 'user' ? 'items-end' : 'items-start'}`;
+                const messageRow = document.createElement('div');
+                messageRow.className = `flex items-start gap-3 md:gap-4 fade-in w-full ${sender === 'user' ? 'justify-end' : ''}`;
+                const contentClasses = `p-3 md:p-4 rounded-xl max-w-xl lg:max-w-3xl prose prose-invert prose-sm prose-p:my-2 prose-headings:my-3 ${sender === 'user' ? 'bg-opacity-80' : ''}`;
+                const messageBody = document.createElement('div'); messageBody.className = "message-body";
+                if (isLoading) {
+                    messageBody.innerHTML = '<div class="flex items-center gap-1.5"><div class="w-2 h-2 rounded-full animate-pulse" style="background-color: var(--accent); animation-delay: 0s;"></div><div class="w-2 h-2 rounded-full animate-pulse" style="background-color: var(--accent); animation-delay: 0.2s;"></div><div class="w-2 h-2 rounded-full animate-pulse" style="background-color: var(--accent); animation-delay: 0.4s;"></div></div>';
+                } else { messageBody.innerHTML = DOMPurify.sanitize(marked.parse(text)); }
+                const messageContent = document.createElement('div'); messageContent.className = contentClasses;
+                messageContent.style.backgroundColor = sender === 'user' ? 'var(--accent)' : 'var(--bg-light)';
+                if(isError) messageContent.style.backgroundColor = '#5f2120';
+                messageContent.appendChild(messageBody);
+                messageRow.appendChild(messageContent); messageWrapper.appendChild(messageRow);
+                App.state.ui.chatContainer.appendChild(messageWrapper);
+                App.state.ui.chatContainer.scrollTo({ top: App.state.ui.chatContainer.scrollHeight, behavior: 'smooth' });
+                lucide.createIcons({ nodes: [messageWrapper] });
+                if (!isLoading && sender !== 'user') this.addMessageActions(messageWrapper, text);
+                return messageWrapper;
+            },
+            addMessageActions(messageWrapper, text) {
+                const existingActions = messageWrapper.querySelector('.message-actions'); if (existingActions) existingActions.remove();
+                const actionsContainer = document.createElement('div'); actionsContainer.className = 'message-actions';
+                const actions = [
+                    { icon: 'copy', text: 'Copia', handler: () => this.copyToClipboard(text) },
+                    { icon: 'volume-2', text: 'Ascolta', handler: () => App.Speech.speak(text, true) },
+                    { icon: 'refresh-cw', text: 'Riformula', handler: () => App.reformulateLastMessage() }
+                ];
+                actions.forEach(action => { const btn = document.createElement('button'); btn.className = 'action-btn'; btn.innerHTML = `<i data-lucide="${action.icon}" class="w-3 h-3"></i><span>${action.text}</span>`; btn.onclick = action.handler; actionsContainer.appendChild(btn); });
+                messageWrapper.appendChild(actionsContainer); lucide.createIcons({ nodes: [actionsContainer] });
+            },
+            toggleHistorySidebar() {
+                const { sidebar, sidebarOverlay } = App.state.ui;
+                sidebar.classList.toggle('open');
+                sidebarOverlay.classList.toggle('hidden');
+            },
+            typewriterEffect(element, text) { return new Promise(resolve => { element.innerHTML = ''; let i = 0; const interval = setInterval(() => { if (App.state.stopGenerationController.signal.aborted) { clearInterval(interval); element.innerHTML = DOMPurify.sanitize(marked.parse(text)); this.addCodeCopyButtons(element.parentElement); resolve(); return; } if (i < text.length) { element.innerHTML = DOMPurify.sanitize(marked.parse(text.substring(0, i + 1))); i++; App.state.ui.chatContainer.scrollTop = App.state.ui.chatContainer.scrollHeight; } else { clearInterval(interval); element.innerHTML = DOMPurify.sanitize(marked.parse(text)); this.addCodeCopyButtons(element.parentElement); resolve(); } }, App.config.typingSpeed); }); },
+            copyToClipboard(text) { const textArea = document.createElement("textarea"); textArea.value = text; document.body.appendChild(textArea); textArea.focus(); textArea.select(); try { document.execCommand('copy'); this.updateStatus("Testo copiato."); } catch (err) { console.error('Impossibile copiare', err); this.updateStatus("Errore nella copia."); } document.body.removeChild(textArea); setTimeout(() => this.updateStatus("Pronto."), 2000); },
+            addCodeCopyButtons(container) { container.querySelectorAll('pre').forEach(pre => { if (pre.querySelector('.copy-code-btn')) return; const copyBtn = document.createElement('button'); copyBtn.className = 'copy-code-btn'; copyBtn.innerHTML = `<i data-lucide="copy" class="w-4 h-4"></i>`; copyBtn.setAttribute('title', 'Copia codice'); copyBtn.onclick = () => { const code = pre.querySelector('code').textContent; this.copyToClipboard(code); copyBtn.innerHTML = `<i data-lucide="check" class="w-4 h-4 text-green-400"></i>`; lucide.createIcons({ nodes: [copyBtn] }); setTimeout(() => { copyBtn.innerHTML = `<i data-lucide="copy" class="w-4 h-4"></i>`; lucide.createIcons({ nodes: [copyBtn] }); }, 2000); }; pre.appendChild(copyBtn); lucide.createIcons({ nodes: [copyBtn] }); }); },
+            showClearHistoryConfirm() { this.showModal("Eliminare la Cronologia", "Sei sicuro di voler eliminare tutte le conversazioni? Questa azione è irreversibile.", false, () => { App.Storage.clearAll(); App.startNewChat(); }); },
+            showModal(title, message, isError = false, onConfirm = null) { const existingModal = document.getElementById('confirm-modal'); if(existingModal) existingModal.remove(); const modal = document.createElement('div'); modal.id = 'confirm-modal'; modal.className = "fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50 fade-in"; modal.innerHTML = `<div class="main-container p-6 rounded-2xl shadow-2xl max-w-sm w-full"><h3 class="text-lg font-bold mb-4 ${isError ? 'text-red-400' : ''}">${title}</h3><p class="mb-6" style="color: var(--text-secondary);">${message}</p><div class="flex justify-end gap-4">${onConfirm ? `<button id="cancel-btn" class="px-4 py-2 rounded-lg border" style="border-color: var(--accent);">Annulla</button>` : ''}<button id="confirm-btn" class="px-4 py-2 rounded-lg text-white ${onConfirm ? 'bg-red-600 hover:bg-red-500' : 'bg-gray-600 hover:bg-gray-500'}">${onConfirm ? 'Elimina' : 'OK'}</button></div></div>`; document.body.appendChild(modal); const confirmBtn = document.getElementById('confirm-btn'); const cancelBtn = document.getElementById('cancel-btn'); confirmBtn.onclick = () => { if(onConfirm) onConfirm(); modal.remove(); }; if(cancelBtn) { cancelBtn.onclick = () => modal.remove(); } }
+        },
+        Speech: {
+            recognition: null,
+            init() {
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                if (SpeechRecognition) { this.recognition = new SpeechRecognition(); this.recognition.continuous = false; this.recognition.lang = 'it-IT'; this.recognition.interimResults = false; this.bindRecognitionEvents(); } 
+                else { App.state.ui.micBtn.style.display = 'none'; }
+            },
+            bindRecognitionEvents() {
+                this.recognition.onstart = () => { App.state.isDictating = true; App.state.ui.micBtn.classList.add('mic-active'); App.UI.updateStatus("Sto ascoltando..."); };
+                this.recognition.onresult = (event) => { App.state.ui.userInput.value += event.results[0][0].transcript; };
+                this.recognition.onend = () => { App.state.isDictating = false; App.state.ui.micBtn.classList.remove('mic-active'); App.UI.updateStatus("Pronto."); };
+                this.recognition.onerror = (event) => { console.error("Errore dettatura:", event.error); App.UI.updateStatus("Errore microfono."); };
+            },
+            toggleDictation() { if (!this.recognition) return; if (App.state.isDictating) { this.recognition.stop(); } else { this.recognition.start(); } },
+            speak(text, force = false) {
+                return new Promise((resolve) => {
+                    if (!window.speechSynthesis || !text) { resolve(); return; }
+                    window.speechSynthesis.cancel(); App.state.isSpeaking = true;
+                    const utterance = new SpeechSynthesisUtterance(text); utterance.lang = 'it-IT';
+                    const voices = window.speechSynthesis.getVoices();
+                    utterance.voice = voices.find(v => v.lang === 'it-IT' && v.name.includes('Google')) || voices.find(v => v.lang === 'it-IT');
+                    utterance.onend = () => { App.state.isSpeaking = false; resolve(); };
+                    utterance.onerror = (e) => { console.error("Errore sintesi vocale:", e); resolve(); };
+                    window.speechSynthesis.speak(utterance);
+                });
+            }
+        },
+        Storage: {
+            getChats() { return JSON.parse(localStorage.getItem('jarvis-chat-history')) || {}; },
+            saveChats(chats) { const sortedChats = Object.values(chats).sort((a,b)=>b.timestamp-a.timestamp); const limitedChats = {}; sortedChats.slice(0,App.config.maxHistoryItems).forEach(chat=>{limitedChats[chat.id]=chat;}); localStorage.setItem('jarvis-chat-history', JSON.stringify(limitedChats)); },
+            saveCurrentChat(firstMessage = null) { if (!App.state.currentChatId) { App.state.currentChatId = `chat_${Date.now()}`; } const allChats = this.getChats(); const chatTitle = firstMessage?.substring(0,35) || allChats[App.state.currentChatId]?.title || 'Nuova Conversazione'; allChats[App.state.currentChatId] = { id: App.state.currentChatId, title: chatTitle, history: App.state.chatHistory, timestamp: Date.now() }; this.saveChats(allChats); this.renderHistory(); },
+            loadChat(chatId) { const chatData = this.getChats()[chatId]; if (!chatData) return; App.stopGeneration(); App.state.currentChatId = chatId; App.state.chatHistory = chatData.history; App.state.ui.chatContainer.innerHTML = ''; App.state.chatHistory.slice(2).forEach(msg => App.UI.appendMessage(msg.parts[0].text, msg.role)); this.renderHistory(); App.UI.updateStatus("Pronto."); if(window.innerWidth < 768) App.UI.toggleHistorySidebar(); },
+            deleteChat(chatId, event) { event.stopPropagation(); const allChats = this.getChats(); delete allChats[chatId]; this.saveChats(allChats); if (App.state.currentChatId === chatId) App.startNewChat(); this.renderHistory(); },
+            clearAll() { localStorage.removeItem('jarvis-chat-history'); this.renderHistory(); },
+            renderHistory() { App.state.ui.historyContainer.innerHTML = ''; const sortedChats = Object.values(this.getChats()).sort((a,b)=>b.timestamp-a.timestamp); sortedChats.forEach(chat => { const chatLink = document.createElement('button'); chatLink.className = `w-full flex items-center justify-between text-left p-2.5 mb-1 rounded-lg truncate transition-colors group`; chatLink.style.backgroundColor = chat.id === App.state.currentChatId ? 'var(--bg-light)' : 'transparent'; chatLink.onclick = () => this.loadChat(chat.id); const title = document.createElement('span'); title.textContent = chat.title; title.className = "flex-grow truncate pr-2"; const deleteBtn = document.createElement('button'); deleteBtn.className = "flex-shrink-0 p-1 rounded-full hover:bg-red-900/50 text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"; deleteBtn.innerHTML = `<i data-lucide="trash-2" class="w-4 h-4"></i>`; deleteBtn.setAttribute('title', `Elimina: ${chat.title}`); deleteBtn.onclick = (e) => this.deleteChat(chat.id, e); chatLink.appendChild(title); chatLink.appendChild(deleteBtn); App.state.ui.historyContainer.appendChild(chatLink); }); lucide.createIcons(); }
+        }
+    };
+    
+    // --- MODULO CHAT VOCALE ---
+    const VoiceApp = {
+        state: { isActive: false, isListening: false, isSpeaking: false, isAudioEnabled: true, history: [], ui: {} },
+        init() {
+            this.state.ui = {
+                overlay: document.getElementById('voice-chat-overlay'),
+                visualizer: document.getElementById('voice-visualizer'),
+                status: document.getElementById('voice-status'),
+                transcript: document.getElementById('voice-transcript'),
+                exitBtn: document.getElementById('voice-exit-btn'),
+                toggleAudioBtn: document.getElementById('voice-toggle-audio-btn'),
+            };
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (SpeechRecognition) {
+                this.recognition = new SpeechRecognition(); this.recognition.continuous = true; this.recognition.interimResults = true; this.recognition.lang = 'it-IT';
+                this.bindEvents();
+            } else { App.state.ui.voiceModeBtn.style.display = 'none'; }
+            this.audio = {
+                send: new Tone.Synth({oscillator:{type:"triangle"},envelope:{attack:0.005,decay:0.1,sustain:0,release:0.1}}).toDestination(),
+                receive: new Tone.Synth({oscillator:{type:"sine"},envelope:{attack:0.005,decay:0.2,sustain:0,release:0.2}}).toDestination(),
+            };
+        },
+        bindEvents() {
+            this.state.ui.exitBtn.addEventListener('click', () => this.stop());
+            this.state.ui.toggleAudioBtn.addEventListener('click', () => this.toggleAudio());
+            this.recognition.onstart = () => { this.state.isListening = true; this.state.ui.visualizer.classList.add('active'); this.state.ui.status.textContent = "In ascolto..."; };
+            this.recognition.onend = () => { this.state.isListening = false; this.state.ui.visualizer.classList.remove('active'); if (this.state.isActive) { setTimeout(() => this.recognition.start(), 250); } };
+            this.recognition.onresult = (event) => {
+                let finalTranscript = '';
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    this.state.ui.transcript.textContent = event.results[i][0].transcript;
+                    if (event.results[i].isFinal) { finalTranscript += event.results[i][0].transcript; }
+                }
+                if (finalTranscript) { this.recognition.stop(); this.handleUserInput(finalTranscript); }
+            };
+        },
+        async start() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                stream.getTracks().forEach(track => track.stop()); // Richiediamo solo il permesso, non usiamo lo stream
+                this.state.isActive = true; this.state.ui.overlay.classList.remove('hidden'); this.state.ui.overlay.classList.add('flex');
+                this.state.history = [App.config.systemInstruction, App.config.systemResponse];
+                this.speak("Sono Jarvis. Come posso assisterla?");
+                this.recognition.start();
+            } catch (err) {
+                console.error("Accesso al microfono negato:", err);
+                App.UI.showModal("Accesso Negato", "È necessario consentire l'accesso al microfono per utilizzare la chat vocale.", true);
+            }
+        },
+        stop() { this.state.isActive = false; this.recognition.stop(); window.speechSynthesis.cancel(); this.state.ui.overlay.classList.add('hidden'); },
+        async handleUserInput(text) {
+            this.state.ui.status.textContent = "Elaborazione..."; this.playSound('send');
+            this.state.history.push({ role: 'user', parts: [{ text }] });
+            try {
+                const response = await App.API.getCompletion(this.state.history, null);
+                this.state.history.push({ role: 'model', parts: [{ text: response }] });
+                this.playSound('receive');
+                await this.speak(response);
+            } catch (error) {
+                console.error("Errore API vocale:", error);
+                await this.speak("Mi scuso, si è verificato un errore.");
+            }
+        },
+        speak(text) {
+            return new Promise(resolve => {
+                if (!this.state.isAudioEnabled) { resolve(); return; }
+                this.state.isSpeaking = true; this.state.ui.status.textContent = "Jarvis sta parlando...";
+                const utterance = new SpeechSynthesisUtterance(text); utterance.lang = 'it-IT';
+                const voices = window.speechSynthesis.getVoices();
+                utterance.voice = voices.find(v => v.lang === 'it-IT' && v.name.includes('Google')) || voices.find(v => v.lang === 'it-IT');
+                utterance.onend = () => { this.state.isSpeaking = false; this.state.ui.transcript.textContent = ''; this.recognition.start(); resolve(); };
+                window.speechSynthesis.speak(utterance);
+            });
+        },
+        toggleAudio() {
+            this.state.isAudioEnabled = !this.state.isAudioEnabled;
+            this.state.ui.toggleAudioBtn.innerHTML = this.state.isAudioEnabled ? '<i data-lucide="volume-2"></i>' : '<i data-lucide="volume-x"></i>';
+            lucide.createIcons({ nodes: [this.state.ui.toggleAudioBtn] });
+            if (!this.state.isAudioEnabled) window.speechSynthesis.cancel();
+        },
+        playSound(sound) { if (this.state.isAudioEnabled) this.audio[sound]?.triggerAttackRelease(sound === 'send' ? 'C4' : 'G4', "16n"); }
+    };
+
+    // Inizializzazione moduli
+    document.addEventListener('DOMContentLoaded', () => {
+        App.init();
+        App.startApp();
+        VoiceApp.init();
+    });
+    </script>
+</body>
+</html>
